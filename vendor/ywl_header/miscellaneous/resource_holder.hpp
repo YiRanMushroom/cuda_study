@@ -92,7 +92,8 @@ namespace ywl::miscellaneous {
         }
 
         constexpr void reset() {
-            T::destroy_resource(T::release_resource_from_storage(T::move_storage(storage)));
+            if (has_value())
+                T::destroy_resource(T::release_resource_from_storage(T::move_storage(storage)));
         }
 
         [[nodiscard]] constexpr bool has_value() const {
@@ -171,7 +172,8 @@ namespace ywl::miscellaneous {
         }
 
         constexpr void reset() {
-            T::destroy_value(T::move_value(value));
+            if (has_value())
+                T::destroy_value(T::move_value(value));
         }
 
         [[nodiscard]] constexpr bool has_value() const {

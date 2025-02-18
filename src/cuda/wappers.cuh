@@ -25,7 +25,7 @@ namespace cuda {
                     assert(byte_size == 0);
                 }
 
-                // std::cout << "destroyed cuda ptr with size: " << byte_size << std::endl;
+                std::cout << "destroyed cuda ptr with size: " << byte_size << std::endl;
 
                 ptr = nullptr;
                 byte_size = 0;
