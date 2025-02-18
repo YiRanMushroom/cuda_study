@@ -9,7 +9,7 @@ set(CMAKE_CXX_STANDARD 23)
 
 set(CMAKE_CUDA_ARCHITECTURES 52)
 
-file (GLOB_RECURSE SOURCES "src/*.cu" "src/*.cpp" "src/*.hpp" "src/*.h" "src/*.cuh")
+file(GLOB_RECURSE SOURCES "src/*.cu" "src/*.cpp" "src/*.hpp" "src/*.h" "src/*.cuh")
 
 add_executable(${PROJECT_NAME} ${SOURCES})
 
@@ -21,3 +21,14 @@ set_target_properties(
 
 target_include_directories(${PROJECT_NAME} PRIVATE vendor)
 target_precompile_headers(${PROJECT_NAME} PRIVATE vendor/ywl_header/all.hpp)
+
+target_link_libraries(${PROJECT_NAME}
+        CUDA::cublas
+)
+
+#[[
+find_package(MKL REQUIRED)
+
+target_link_libraries(
+        ${PROJECT_NAME}
+        MKL::MKL)]]

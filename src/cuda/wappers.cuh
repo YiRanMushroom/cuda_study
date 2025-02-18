@@ -178,32 +178,38 @@ namespace cuda {
         template<typename T>
         struct Wait_For_Size_Then_Invoke_Return_Struct;
 
-        template<typename F, int block_size, typename... Args>
-        struct Invoke_Return_Struct {
+        template<typename F, int block_size, typename ReturnType, bool forward_size, typename... Args>
+        struct Invoke_Same_Return_Struct {
         private:
             int array_length;
             F *func;
             std::tuple<const Args &...> arrays;
 
         public:
-            friend struct Wait_For_Size_Then_Invoke_Return_Struct<Invoke_Return_Struct>;
+            friend struct Wait_For_Size_Then_Invoke_Return_Struct<Invoke_Same_Return_Struct>;
             // reference to the arrays
-            Invoke_Return_Struct(int array_length, F *func,
-                                 const Args &... arrays) : array_length(array_length),
-                                                           func(func), arrays(arrays...) {}
+            Invoke_Same_Return_Struct(int array_length, F *func,
+                                      const Args &... arrays) : array_length(array_length),
+                                                                func(func), arrays(arrays...) {}
 
 
             auto invoke_with(auto &&... args) {
-                auto ret = CudaArray<typename std::remove_cvref_t<decltype(std::get<0>(arrays)
-                )>::value_type>::same_size_as(
-                    std::get<0>(arrays));
+                auto ret = CudaArray<ReturnType>::with_length(array_length);
 
-                std::apply([&](const auto &... array) {
-                    func<<<(array_length + block_size - 1) / block_size, block_size>>>(array.get_as_buffer()...,
-                        ret.get_as_buffer(),
-                        ret.byte_size(),
-                        std::forward<decltype(args)>(args)...);
-                }, arrays);
+                if constexpr (forward_size) {
+                    std::apply([&](const auto &... array) {
+                        func<<<(array_length + block_size - 1) / block_size, block_size>>>(array.get_as_buffer()...,
+                            ret.get_as_buffer(),
+                            ret.byte_size(),
+                            std::forward<decltype(args)>(args)...);
+                    }, arrays);
+                } else {
+                    std::apply([&](const auto &... array) {
+                        func<<<(array_length + block_size - 1) / block_size, block_size>>>(array.get_as_buffer()...,
+                            ret.get_as_buffer(),
+                            std::forward<decltype(args)>(args)...);
+                    }, arrays);
+                }
 
                 return Wait_Result_T<decltype(ret)>(std::move(ret));
             }
@@ -229,6 +235,27 @@ namespace cuda {
         };
     }
 
+    template<typename ReturnType = void, bool forward_size = false, int block_size = 256, typename F, typename First,
+        typename
+        ... Rest>
+    // func must be global function
+    auto invoke_any_size(F *func, const First &first, const Rest &... rest) {
+        if constexpr (!std::is_same_v<ReturnType, void>) {
+            return _impl::Wait_For_Size_Then_Invoke_Return_Struct{
+                _impl::Invoke_Same_Return_Struct<F, block_size, ReturnType, forward_size, const First &, const Rest &
+                    ...>(
+                    0, func, first, rest...)
+            };
+        } else {
+            using ActualReturnType = typename std::remove_cvref_t<decltype(first)>::value_type;
+            return _impl::Wait_For_Size_Then_Invoke_Return_Struct{
+                _impl::Invoke_Same_Return_Struct<F, block_size, ActualReturnType, forward_size, const First &,
+                    const Rest &...>(
+                    0, func, first, rest...)
+            };
+        }
+    };
+
     /// F is the function, expect it to take some (or 1) T*, which is the device data pointer
     /// any number of input arguments, and then one output T* pointer
     /// followed by the length of the data (not byte size)
@@ -236,23 +263,26 @@ namespace cuda {
     /// F must be a function pointer
     /// for the size of the data, we expect all T* has the same size
     /// otherwise the smallest size will be used
-    template<int block_size = 256, typename F, typename First, typename... Rest> // func must be global function
+    template<typename ReturnType = void, bool forward_size = true, int block_size = 256, typename F, typename First, typename
+        ... Rest>
+    // func must be global function
     auto invoke_same_size(F *func, const First &first, const Rest &... rest) {
         // assert all cuda_arrays have the same length
         int array_length = std::min({first.length(), rest.length()...});
         // this function returns a struct that overloads operator()
-        int grind_size = (first.length() + block_size - 1) / block_size;
-        return _impl::Invoke_Return_Struct<F, block_size, const First &, const Rest &...>(
-            array_length, func, first, rest...);
+        if constexpr (!std::is_same_v<ReturnType, void>) {
+            return _impl::Wait_For_Size_Then_Invoke_Return_Struct{
+                _impl::Invoke_Same_Return_Struct<F, block_size, ReturnType, forward_size, const First &, const Rest &
+                    ...>(
+                    array_length, func, first, rest...)
+            };
+        } else {
+            using ActualReturnType = typename std::remove_cvref_t<decltype(first)>::value_type;
+            return _impl::Wait_For_Size_Then_Invoke_Return_Struct{
+                _impl::Invoke_Same_Return_Struct<F, block_size, ActualReturnType, forward_size, const First &, const
+                    Rest &...>(
+                    array_length, func, first, rest...)
+            };
+        }
     }
-
-    template<int block_size = 256, typename F, typename First, typename... Rest> // func must be global function
-    auto invoke_any_size(F *func, const First &first, const Rest &... rest) {
-        /*_impl::Invoke_Return_Struct<F, block_size, const First &, const Rest &...>(
-           grind_size, 0, first.length(), func, first, rest...);*/
-        return _impl::Wait_Result_T{
-            _impl::Invoke_Return_Struct<F, block_size, const First &, const Rest &...>(
-                0, func, first, rest...)
-        };
-    };
 }
