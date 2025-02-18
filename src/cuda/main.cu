@@ -1,10 +1,8 @@
 #include <iostream>
 #include <ywl_header/all.hpp>
 #include "wappers.cuh"
-#include "../cpp/multi_dim_span.hpp"
 #include <cuda_runtime.h>
 #include <cublas_v2.h>
-// #include <mkl.h>
 
 __global__ void test_expensive_on_device(const float *in1, const float *in2, float *out, const int length,
                                          const float add_para,
