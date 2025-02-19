@@ -6,6 +6,7 @@
 
 namespace cuda {
     namespace _impl {
+        template<typename T>
         struct CudaPtrHolderHint {
             struct voidptr_ull {
                 void *ptr;
@@ -15,6 +16,7 @@ namespace cuda {
             };
 
             using value_type = voidptr_ull;
+            using data_type = T;
             constexpr static value_type default_value = {nullptr, 0};
 
             static void destroy_value(value_type &&value) {
@@ -25,7 +27,9 @@ namespace cuda {
                     assert(byte_size == 0);
                 }
 
-                std::cout << "destroyed cuda ptr with byte size: " << byte_size << std::endl;
+                std::cout << "destroyed cuda ptr of type " << typeid(T).name() << " with length "
+                        << byte_size / sizeof(T)
+                        << std::endl;
 
                 ptr = nullptr;
                 byte_size = 0;
@@ -46,18 +50,19 @@ namespace cuda {
             }
         };
 
-        static_assert(ywl::miscellaneous::is_unique_resource_holder_identity_hint_type<CudaPtrHolderHint>);
+        // static_assert(ywl::miscellaneous::is_unique_resource_holder_identity_hint_type<CudaPtrHolderHint>);
 
-        using CudaPtrHolder = ywl::miscellaneous::unique_holder<CudaPtrHolderHint>;
+        template<typename T>
+        using CudaPtrHolder = ywl::miscellaneous::unique_holder<CudaPtrHolderHint<T> >;
     }
 
     template<typename T> requires std::is_trivial_v<T>
     class CudaArray {
     private:
         constexpr static size_t element_size = sizeof(T);
-        _impl::CudaPtrHolder m_holder;
+        _impl::CudaPtrHolder<T> m_holder;
 
-        CudaArray(_impl::CudaPtrHolder holder) : m_holder(std::move(holder)) {}
+        CudaArray(_impl::CudaPtrHolder<T> holder) : m_holder(std::move(holder)) {}
 
     public:
         using value_type = T;
@@ -99,7 +104,7 @@ namespace cuda {
         static auto create_from_host(Iter begin, Iter end) -> CudaArray<T> {
             size_t size = std::distance(begin, end);
             size_t byte_size = size * element_size;
-            auto holder = _impl::CudaPtrHolder::create(byte_size);
+            auto holder = _impl::CudaPtrHolder<T>::create(byte_size);
             cudaMemcpy(holder.get().ptr, &(*begin), byte_size, cudaMemcpyHostToDevice);
             return CudaArray<T>{std::move(holder)};
         }
@@ -130,14 +135,14 @@ namespace cuda {
         }
 
         static auto copy_from(const CudaArray<T> &other) -> CudaArray<T> {
-            auto holder = _impl::CudaPtrHolder::create(other.byte_size());
+            auto holder = _impl::CudaPtrHolder<T>::create(other.byte_size());
             cudaMemcpy(holder.get().ptr, other.get_as_buffer(), other.byte_size(), cudaMemcpyDeviceToDevice);
             return CudaArray<T>{std::move(holder)};
         }
 
         static auto with_length(size_t size) -> CudaArray<T> {
             size_t byte_size = size * element_size;
-            auto holder = _impl::CudaPtrHolder::create(byte_size);
+            auto holder = _impl::CudaPtrHolder<T>::create(byte_size);
             return CudaArray<T>{std::move(holder)};
         }
 
@@ -263,7 +268,8 @@ namespace cuda {
     /// F must be a function pointer
     /// for the size of the data, we expect all T* has the same size
     /// otherwise the smallest size will be used
-    template<typename ReturnType = void, bool forward_size = true, int block_size = 256, typename F, typename First, typename
+    template<typename ReturnType = void, bool forward_size = true, int block_size = 256, typename F, typename First,
+        typename
         ... Rest>
     // func must be global function
     auto invoke_same_size(F *func, const First &first, const Rest &... rest) {

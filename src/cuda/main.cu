@@ -139,7 +139,7 @@ int main() {
 
             ywl::miscellaneous::scoped_timer timer;
 
-            matrix_mul_device_third<10>(cuda1.get_as_buffer(), cuda2.get_as_buffer(),
+            matrix_mul_device_third(cuda1.get_as_buffer(), cuda2.get_as_buffer(),
                                     cuda_out.get_as_buffer(),
                                     20000,
                                     20000,
