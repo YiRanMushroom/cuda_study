@@ -50,7 +50,7 @@ namespace cuda {
             }
         };
 
-        // static_assert(ywl::miscellaneous::is_unique_resource_holder_identity_hint_type<CudaPtrHolderHint>);
+        static_assert(ywl::miscellaneous::is_unique_resource_holder_identity_hint_type<CudaPtrHolderHint<void> >);
 
         template<typename T>
         using CudaPtrHolder = ywl::miscellaneous::unique_holder<CudaPtrHolderHint<T> >;
