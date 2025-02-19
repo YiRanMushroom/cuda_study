@@ -105,69 +105,53 @@ __global__ void matrix_mul_device_second(const float *mat1, const float *mat2, f
     }
 }
 
+template<size_t repeat = 1>
 void matrix_mul_device_third(const float *A, const float *B, float *C, int m, int n, int p) {
     cublasHandle_t handle;
     cublasCreate(&handle);
 
     float alpha = 1.0f, beta = 0.0f;
 
-    cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, p, m, n, &alpha, B, p, A, n, &beta, C, p);
+    for (int i = 0; i < repeat; i++)
+        cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, p, m, n, &alpha, B, p, A, n, &beta, C, p);
 
     cublasDestroy(handle);
 }
 
-/*
-void test_cpu() {
-    const int m = 30000, n = 100, k = 50000;
-    float *A = new float[m * k]{};
-    float *B = new float[k * n]{};
-    float *C = new float[m * n]{};
-
-    ywl::miscellaneous::timer timer;
-    cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
-                m, n, k, 1.0f, A, k, B, n, 0.0f, C, n);
-    std::cout << "cpu time: " << timer.to_string() << std::endl;
-
-    delete[] A;
-    delete[] B;
-    delete[] C;
-}
-*/
-
 int main() {
-    // test_cpu();
-    // std::terminate();
     // scope
     {
-        // input 30000 * 10000
-        std::vector<float> input1(300000000, 1);
-        // input2 10000 * 50000
-        std::vector<float> input2(500000000, 2);
+        // input 20000 *20000
+        std::vector<float> input1(400000000, 1);
+        // input2 20000 * 20000
+        std::vector<float> input2(400000000, 2);
 
         // scope
         {
-            // output 30000 * 50000
-            std::vector<float> output(1500000000);
+            // output 100000000
+            std::vector<float> output(400000000);
 
             std::cout << "start" << std::endl;
             auto cuda1 = cuda::CudaArray<float>::create_from_host(input1.begin(), input1.end());
             auto cuda2 = cuda::CudaArray<float>::create_from_host(input2.begin(), input2.end());
-            auto cuda_out = cuda::CudaArray<float>::with_length(1500000000);
+            auto cuda_out = cuda::CudaArray<float>::with_length(400000000);
             std::cout << "cuda finish copy" << std::endl;
-
-            matrix_mul_device_third(cuda1.get_as_buffer(), cuda2.get_as_buffer(),
-                                    cuda_out.get_as_buffer(),
-                                    30000,
-                                    10000,
-                                    50000);
 
             ywl::miscellaneous::scoped_timer timer;
 
-            cuda_out.yield_block(output.begin(), output.end());
+            matrix_mul_device_third<10>(cuda1.get_as_buffer(), cuda2.get_as_buffer(),
+                                    cuda_out.get_as_buffer(),
+                                    20000,
+                                    20000,
+                                    20000);
+
 
             std::cout << "third time: " << timer.to_string() << std::endl;
+
+            cuda_out.yield_non_block(output.begin(), output.end());
+
             // print last element
-            std::cout << "output[29999][49999]: " << output[29999 * 5000 + 49999] << std::endl;
+            std::cout << "Last: " << output.back() << std::endl;
         }
 
         /*// scope
